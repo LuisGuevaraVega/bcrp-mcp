@@ -5,7 +5,8 @@ a las 17,167 series estadísticas del Banco Central de Reserva del Perú (BCRP) 
 indicadores del Banco Mundial. Las cuentas las hace Python, no el modelo: cada cifra sale de una llamada que se puede
 repetir y viene con la URL de su fuente.
 
-Tarea de la sesión 04 del curso [Data Science con Python](https://github.com/d2cml-ai/Data-Science-Python/tree/main/sessions/04-mcp-claude-code)
+Proyecto hecho en el diplomado de QLab de la PUCP, como tarea de la sesión 04 del curso
+[Data Science con Python](https://github.com/d2cml-ai/Data-Science-Python/tree/main/sessions/04-mcp-claude-code)
 (el enunciado original está en [`ENUNCIADO.md`](ENUNCIADO.md)). Los resultados están en [`informe.md`](informe.md).
 
 ![Aciertos por modo y crecimiento del PBI regional](grafico.png)
@@ -45,7 +46,7 @@ Ninguna de las dos APIs pide clave.
 
 ![Nota de coyuntura: inflación, expectativas y tasa de referencia](ejemplos/coyuntura.png)
 
-## Uso
+## Instalación
 
 Necesitas [`uv`](https://docs.astral.sh/uv/) y [Claude Code](https://claude.com/claude-code).
 
@@ -55,19 +56,79 @@ uv run pytest -q        # 20 passed; la primera vez baja el catálogo del BCRP (
 claude                  # aprueba los servidores bcrp y fetch de .mcp.json
 ```
 
-En Claude Code:
-
-- *«¿Cuál fue la inflación de Lima a 12 meses en setiembre de 2026?»*
-- *«¿Creció el Perú más que Chile y Colombia desde 2015?»* (usa `comparar_paises`)
-- `@bcrp:bcrp://serie/PN01273PM ¿desde cuándo hay datos de esta serie?`
-- *«Grafica la inflación, la subyacente y la tasa de referencia desde 2023»* (usa `grafico`)
-- *«¿Cuánto creció el crédito en términos reales en el último año?»* (usa `transformar` con `real`)
-- *«Pásame a Excel el tipo de cambio y las reservas de 2025 a hoy»* (usa `exportar`)
-- `/mcp__bcrp__informe "precio de la plata"`: si el tema tiene varias palabras, ponlo entre comillas, porque Claude
-  Code separa los argumentos por espacios.
-- `/mcp__bcrp__coyuntura 2026-09`
-
 Para usarlo en otro proyecto: `claude mcp add bcrp -- uv run --directory /ruta/a/bcrp-mcp server.py`.
+
+## Manual de uso en Claude
+
+No hace falta saber los códigos ni el nombre de las herramientas: pregunta como le preguntarías a un analista.
+Claude busca la serie en el catálogo, trae el dato y te dice de dónde salió. Si quieres comprobar qué hizo, abre el
+detalle de las llamadas o pídele *«muéstrame el código de serie y la URL»*.
+
+### 1. Preguntar por un dato
+
+> ¿Cuál fue la inflación de Lima a 12 meses en setiembre de 2026?
+
+Claude busca la serie con `buscar_series`, consulta el dato con `serie` y responde con el valor, el código de la serie
+(PN01273PM) y el periodo. Para que acierte a la primera:
+
+- **Di el periodo exacto** («setiembre de 2026», «el promedio de 2025»). Si no dices el periodo, Claude usa el último
+  dato publicado.
+- **Di la medida que quieres**: nivel, variación mensual, variación a 12 meses, promedio o fin de periodo. El BCRP
+  tiene muchas series con nombres parecidos.
+- **Si ya sabes el código, dáselo**: *«usa PN01207PM»*.
+
+### 2. Pedir cálculos
+
+Claude no hace las cuentas a mano: se las pide a las herramientas, que las calculan en Python.
+
+| Si quieres… | Pídelo así | Herramienta |
+|---|---|---|
+| Cambio, promedio, máximo o mínimo de un periodo | *«¿Cuánto subió el tipo de cambio en 2026 y cuál fue su máximo?»* | `resumen` |
+| Variación interanual o acumulada | *«Variación interanual del precio del cobre, mes a mes, en 2026»* | `transformar` |
+| Promedio anual | *«Promedio anual del tipo de cambio de 2020 a 2025»* | `transformar` |
+| Índice base 100 | *«Pon el oro y el cobre en índice, base enero de 2025 = 100»* | `transformar` |
+| Valores reales | *«El crédito en soles a precios de 2025»* | `transformar` (deflacta con el IPC de Lima) |
+| Comparar al Perú con otros países | *«¿Creció el Perú más que Chile y Colombia desde 2015?»* | `comparar_paises` (Banco Mundial, anual) |
+
+### 3. Hacer gráficos
+
+> Grafica la inflación, la subyacente y la tasa de referencia desde 2023, y sombrea 2025.
+
+El PNG se guarda en `salidas/`. Claude te da la ruta del archivo y, como también recibe la imagen, puede comentarla.
+Puedes pedir:
+
+- **Hasta 5 series por gráfico.** Si tienen unidades distintas, como dólares y soles, cada una va en su propio panel.
+- **Una transformación**, por ejemplo *«en variación interanual»* o *«en índice base 100»*. Sirve para comparar
+  series de escalas distintas en un solo panel.
+- **Un título propio y periodos sombreados**, como una recesión o un ciclo de alzas de la tasa.
+
+### 4. Llevar los datos a Excel
+
+> Pásame a Excel el tipo de cambio, las reservas y la tasa de referencia de 2025 a hoy.
+
+El `.xlsx` se guarda en `salidas/`. Tiene una hoja con las series alineadas por periodo (las de distinta frecuencia
+van en hojas separadas) y una hoja de metadatos con el nombre, la unidad, la transformación y la URL de cada serie.
+También puedes pedirlo transformado: *«…en variación interanual»*.
+
+### 5. Atajos: `@` para fichas y `/` para informes
+
+- `@bcrp:bcrp://serie/PN01273PM ¿desde cuándo hay datos de esta serie?` adjunta la ficha de la serie: nombre,
+  frecuencia, inicio y última actualización.
+- `/mcp__bcrp__informe "precio de la plata"` escribe un informe breve con cifras y fuentes. **Pon el tema entre
+  comillas** si tiene varias palabras: Claude Code separa los argumentos por espacios.
+- `/mcp__bcrp__coyuntura 2026-09` escribe una nota de coyuntura macro con inflación, tasa de referencia, PBI, tipo de
+  cambio, términos de intercambio, reservas y crédito, más un gráfico.
+
+### 6. Lee los avisos
+
+Las herramientas agregan un `aviso` cuando algo merece cuidado, y Claude debería mencionarlo:
+
+- **«El último dato es de…»**: la serie no llega al periodo pedido. Puede ser el rezago normal de publicación (el
+  IPC sale a inicios del mes siguiente) o una serie que ya no se actualiza: pide otra.
+- **«La serie está descontinuada»**: pide su reemplazo.
+- **«La serie ya es una tasa»**: calcular la variación interanual de una variación % rara vez tiene sentido. Pide
+  la serie en niveles.
+- **«Su promedio es parcial»**: el último año todavía no termina.
 
 ## Archivos
 
